@@ -1,5 +1,6 @@
 package br.pro.hallpaz.standup
 
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,6 +9,7 @@ import android.content.Intent
 import android.graphics.Color
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.SystemClock
 import android.widget.CompoundButton
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
@@ -17,23 +19,18 @@ class MainActivity : AppCompatActivity() {
 
 
     private var notificationManager: NotificationManager? = null
-    private val notificationBuilder: NotificationCompat.Builder
-    get() {
-        val mainIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(this,
-                                                        NOTIFICATION_ID,
-                                                        mainIntent,
-                                                        PendingIntent.FLAG_UPDATE_CURRENT)
+    private var alarmManager: AlarmManager? = null
+    private val repeatInterval: Long
+        get() = 1000//AlarmManager.INTERVAL_FIFTEEN_MINUTES
 
-        return NotificationCompat.Builder(this, PRIMARY_CHANNEL_ID)
-            .setContentTitle("Alerta de PÉ")
-            .setContentText("Levanta e voa!")
-            .setSmallIcon(R.drawable.ic_thumb_up)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_HIGH) //compatibility down here
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
-    }
+    private val triggerTime: Long
+        get() = SystemClock.elapsedRealtime() + repeatInterval
+
+    private val notifyPendingIntent: PendingIntent
+    get() = PendingIntent.getBroadcast(this,
+                                            NOTIFICATION_ID,
+                                            Intent(this, AlarmReceiver::class.java),
+                                            PendingIntent.FLAG_UPDATE_CURRENT)
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,14 +40,20 @@ class MainActivity : AppCompatActivity() {
 
         createNotificationChannel()
         setUpListeners()
+        alarmManager = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+
     }
 
     private fun setUpListeners(){
         toggle_alarm_button.setOnCheckedChangeListener { compoundButton, checked ->
             val toastMessage = if (checked) {
-                deliverNotification(this)
+                alarmManager?.setInexactRepeating(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                                                    triggerTime,
+                                                    repeatInterval,
+                                                    notifyPendingIntent)
                 getString(R.string.alarm_on_string)
             } else{
+                alarmManager?.cancel(notifyPendingIntent)
                 notificationManager?.cancelAll()
                 getString(R.string.alarm_off_string)
             }
@@ -73,11 +76,6 @@ class MainActivity : AppCompatActivity() {
 
             notificationManager?.createNotificationChannel(notificationChannel)
         }
-    }
-
-    fun deliverNotification(context: Context){
-        val builder = notificationBuilder
-        notificationManager?.notify(NOTIFICATION_ID, builder.build())
     }
 
     companion object {
